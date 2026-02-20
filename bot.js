@@ -58,12 +58,40 @@ client.on(Events.InteractionCreate, async interaction => {
 
 // /generate
 if (interaction.commandName === 'generate') {
-    // Verificare ID specific - DOAR acest user poate genera
-    const ALLOWED_USER_ID = '1437854771850776596';
+    // Verificare după ROL ID
+    const ALLOWED_ROLE_ID = '1474504134656004199';
     
-    if (interaction.user.id !== ALLOWED_USER_ID) {
+    // Verifică dacă suntem în guild (server)
+    if (!interaction.guild) {
         return interaction.reply({ 
-            content: '❌ Nu ai permisiune să generezi chei! Contactează administratorul.', 
+            content: '❌ Comanda poate fi folosită doar pe server!', 
+            ephemeral: true 
+        });
+    }
+    
+    // Fetch member cu rolurile
+    let member;
+    try {
+        member = await interaction.guild.members.fetch(interaction.user.id);
+    } catch (err) {
+        console.error('Eroare fetch member:', err);
+        return interaction.reply({ 
+            content: '❌ Eroare la verificarea rolului!', 
+            ephemeral: true 
+        });
+    }
+    
+    // Verifică rolul
+    const hasRole = member.roles.cache.has(ALLOWED_ROLE_ID);
+    
+    console.log('User:', interaction.user.tag);
+    console.log('User roles:', member.roles.cache.map(r => r.name).join(', '));
+    console.log('Looking for role ID:', ALLOWED_ROLE_ID);
+    console.log('Has role:', hasRole);
+    
+    if (!hasRole) {
+        return interaction.reply({ 
+            content: '❌ Nu ai rolul necesar pentru a genera chei!', 
             ephemeral: true 
         });
     }
@@ -77,7 +105,6 @@ if (interaction.commandName === 'generate') {
     expiresAt.setDate(expiresAt.getDate() + days);
 
     console.log('Generating key:', key);
-    console.log('By user:', interaction.user.tag, interaction.user.id);
 
     const { error } = await supabase
         .from('license_keys')
@@ -121,20 +148,6 @@ if (interaction.commandName === 'generate') {
         }
     } catch (e) {}
 }
-
-    const embed = {
-        color: 0xDC2626,
-        title: '🔑 Cheie Generată cu Succes',
-        fields: [
-            { name: 'Cheie', value: `\`\`\`${key}\`\`\``, inline: false },
-            { name: 'Durată', value: `${days} zile`, inline: true },
-            { name: 'Expiră la', value: `<t:${Math.floor(expiresAt.getTime()/1000)}:D>`, inline: true }
-        ],
-        footer: { text: `Generată de ${interaction.user.tag}` },
-        timestamp: new Date().toISOString()
-    };
-
-    await interaction.editReply({ embeds: [embed] });
     
     // /keys
     if (interaction.commandName === 'keys') {
