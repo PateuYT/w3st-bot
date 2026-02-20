@@ -56,53 +56,37 @@ client.once(Events.ClientReady, async () => {
 client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
-    // /generate
-    if (interaction.commandName === 'generate') {
-        const days = interaction.options.getInteger('days') || 30;
-        const key = generateKey();
-        
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + days);
+// /generate
+if (interaction.commandName === 'generate') {
+    const days = interaction.options.getInteger('days') || 30;
+    const key = generateKey();
+    
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + days);
 
-        const { error } = await supabase
-            .from('license_keys')
-            .insert({
-                key: key,
-                duration_days: days,
-                expires_at: expiresAt.toISOString(),
-                created_by: interaction.user.id
-            });
+    console.log('Generating key:', key);
+    console.log('Days:', days);
+    console.log('Expires:', expiresAt.toISOString());
 
-        if (error) {
-            return interaction.reply({ content: '❌ Eroare la salvarea cheii!', ephemeral: true });
-        }
+    const { data, error } = await supabase
+        .from('license_keys')
+        .insert({
+            key: key,
+            duration_days: days,
+            expires_at: expiresAt.toISOString(),
+            created_by: interaction.user.id
+        });
 
-        const embed = {
-            color: 0xDC2626,
-            title: '🔑 Cheie Generată',
-            fields: [
-                { name: 'Cheie', value: `\`${key}\``, inline: false },
-                { name: 'Durată', value: `${days} zile`, inline: true },
-                { name: 'Expiră', value: expiresAt.toLocaleDateString('ro-RO'), inline: true }
-            ],
-            footer: { text: `Generată de ${interaction.user.tag}` },
-            timestamp: new Date()
-        };
+    console.log('Supabase response:', { data, error });
 
-        await interaction.reply({ embeds: [embed], ephemeral: true });
-        
-        // Log în canal
-        const logChannel = interaction.guild.channels.cache.find(c => c.name === 'license-logs');
-        if (logChannel) {
-            logChannel.send({
-                embeds: [{
-                    color: 0x22C55E,
-                    description: `✅ **${interaction.user.tag}** a generat o cheie de **${days} zile**`
-                }]
-            });
-        }
+    if (error) {
+        console.error('❌ Supabase error:', error);
+        return interaction.reply({ 
+            content: `❌ Eroare: ${error.message}`, 
+            ephemeral: true 
+        });
     }
-
+}
     // /keys
     if (interaction.commandName === 'keys') {
         await interaction.deferReply({ ephemeral: true });
