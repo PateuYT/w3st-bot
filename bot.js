@@ -17,7 +17,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 // ✅ Rolul care are voie să genereze
 const ALLOWED_ROLE_ID = '1474504134656004199';
 
-// Generează cheie random W3ST-XXXX-XXXX-XXXX (ca în codul tău original)
+// Generează cheie random W3ST-XXXX-XXXX-XXXX
 function generateKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const segment = () =>
@@ -35,26 +35,26 @@ function formatDate(date) {
   return `${day}/${month}/${year} ${hours}:${minutes}`;
 }
 
-// Comenzi Slash
+// ⚠️ IMPORTANT: required options TREBUIE să fie înaintea celor optional
 const commands = [
   new SlashCommandBuilder()
     .setName('generate')
     .setDescription('Generează chei de licență W3ST')
     .addIntegerOption(option =>
       option
-        .setName('days')
-        .setDescription('Număr de zile (default: 30)')
-        .setRequired(false)
-        .setMinValue(1)
-        .setMaxValue(365)
-    )
-    .addIntegerOption(option =>
-      option
-        .setName('count')
+        .setName('count') // ✅ REQUIRED FIRST
         .setDescription('Câte chei să genereze')
         .setRequired(true)
         .setMinValue(1)
         .setMaxValue(1000)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('days') // ✅ OPTIONAL AFTER
+        .setDescription('Număr de zile (default: 30)')
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(365)
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
@@ -79,13 +79,11 @@ client.once(Events.ClientReady, async () => {
   try {
     await client.application.commands.set(commands);
     console.log('✅ Comenzi înregistrate!');
-    console.log('ℹ️ Dacă nu vezi opțiunea count, așteaptă câteva secunde sau dă restart botului.');
   } catch (error) {
     console.error('❌ Eroare la înregistrarea comenzilor:', error);
   }
 });
 
-// Handler comenzi
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -96,35 +94,33 @@ client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.guild) {
       return interaction.reply({
         content: '❌ Comanda poate fi folosită doar pe server!',
-        ephemeral: true,
+        flags: 64, // ephemeral
       });
     }
 
-    // verifică rol
+    // verificare rol
     let member;
     try {
       member = await interaction.guild.members.fetch(interaction.user.id);
-    } catch (err) {
+    } catch {
       return interaction.reply({
         content: '❌ Eroare la verificarea rolului!',
-        ephemeral: true,
+        flags: 64,
       });
     }
 
     if (!member.roles.cache.has(ALLOWED_ROLE_ID)) {
       return interaction.reply({
         content: '❌ Nu ai rolul necesar pentru a genera chei!',
-        ephemeral: true,
+        flags: 64,
       });
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
 
-    // default 30 (cum aveai tu)
-    let days = interaction.options.getInteger('days') ?? 30;
-
-    // count (obligatoriu)
     const count = interaction.options.getInteger('count');
+    const days = interaction.options.getInteger('days') ?? 30;
+
     if (!count || count < 1) {
       return interaction.editReply({ content: '❌ Număr invalid de chei!' });
     }
@@ -132,10 +128,8 @@ client.on(Events.InteractionCreate, async interaction => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + days);
 
-    // generează cheile
     const keys = Array.from({ length: count }, () => generateKey());
 
-    // insert bulk supabase
     const rows = keys.map(k => ({
       key: k,
       duration_days: days,
@@ -152,14 +146,12 @@ client.on(Events.InteractionCreate, async interaction => {
       });
     }
 
-    // confirmare privată
     await interaction.editReply({
       content: `✅ Am generat **${count}** chei și le-am trimis în canal!`,
     });
 
     const header = `W3ST keys (${count}) | Duration: ${days} days | Expires: ${formatDate(expiresAt)}\n`;
 
-    // dacă sunt mai mult de 100 -> fișier .txt
     if (count > 100) {
       const content = header + keys.join('\n') + '\n';
       const file = new AttachmentBuilder(Buffer.from(content, 'utf8'), {
@@ -171,7 +163,6 @@ client.on(Events.InteractionCreate, async interaction => {
         files: [file],
       });
     } else {
-      // <= 100 -> mesaj (cu fallback dacă depășește limita de 2000)
       const body = keys.join('\n');
       const msg = `${header}\`\`\`\n${body}\n\`\`\``;
 
@@ -203,14 +194,14 @@ client.on(Events.InteractionCreate, async interaction => {
           ],
         });
       }
-    } catch (e) {}
+    } catch {}
   }
 
   // =========================
   // /keys
   // =========================
   if (interaction.commandName === 'keys') {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
 
     const { data: keys, error } = await supabase
       .from('license_keys')
@@ -250,12 +241,12 @@ client.on(Events.InteractionCreate, async interaction => {
     const { error } = await supabase.from('license_keys').delete().eq('key', key);
 
     if (error) {
-      return interaction.reply({ content: '❌ Eroare la ștergere!', ephemeral: true });
+      return interaction.reply({ content: '❌ Eroare la ștergere!', flags: 64 });
     }
 
     await interaction.reply({
       content: `✅ Cheia \`${key}\` a fost revocată!`,
-      ephemeral: true,
+      flags: 64,
     });
   }
 });
