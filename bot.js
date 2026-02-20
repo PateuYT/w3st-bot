@@ -58,147 +58,155 @@ client.on(Events.InteractionCreate, async interaction => {
 
 const { AttachmentBuilder } = require('discord.js');
 
-// /generate
-if (interaction.commandName === 'generate') {
-  const ALLOWED_ROLE_ID = '1474504134656004199';
+const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
 
-  if (!interaction.guild) {
-    return interaction.reply({
-      content: '❌ Comanda poate fi folosită doar pe server!',
-      ephemeral: true
-    });
-  }
+const ALLOWED_ROLE_ID = '1474504134656004199';
 
-  let member;
-  try {
-    member = await interaction.guild.members.fetch(interaction.user.id);
-  } catch (err) {
-    return interaction.reply({
-      content: '❌ Eroare la verificarea rolului!',
-      ephemeral: true
-    });
-  }
+// schimbă după tine
+function generateKey() {
+  // exemplu simplu: 5 grupe x 5 caractere
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const part = (len) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return `${part(5)}-${part(5)}-${part(5)}-${part(5)}-${part(5)}`;
+}
 
-  const hasRole = member.roles.cache.has(ALLOWED_ROLE_ID);
-  if (!hasRole) {
-    return interaction.reply({
-      content: '❌ Nu ai rolul necesar pentru a genera chei!',
-      ephemeral: true
-    });
-  }
+function formatDate(date) {
+  const d = new Date(date);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
 
-  await interaction.deferReply({ ephemeral: true });
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('generate')
+    .setDescription('Generează chei licență')
+    .addIntegerOption(opt =>
+      opt.setName('days')
+        .setDescription('Durata în zile (7, 31, 91). Dacă nu e valid, se rotunjește.')
+        .setRequired(false)
+    )
+    .addIntegerOption(opt =>
+      opt.setName('count')
+        .setDescription('Câte chei să genereze')
+        .setRequired(true)
+        .setMinValue(1)
+        .setMaxValue(1000)
+    ),
 
-  // Opțiuni predefinite de durată
-  const durationOptions = [7, 31, 91];
-  let days = interaction.options.getInteger('days') || 7;
+  /**
+   * @param {import('discord.js').ChatInputCommandInteraction} interaction
+   * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+   */
+  async execute(interaction, supabase) {
+    if (!interaction.guild) {
+      return interaction.reply({ content: '❌ Comanda poate fi folosită doar pe server!', ephemeral: true });
+    }
 
-  // Rotunjește la cea mai apropiată opțiune validă
-  if (!durationOptions.includes(days)) {
-    days = durationOptions.reduce((prev, curr) =>
-      Math.abs(curr - days) < Math.abs(prev - days) ? curr : prev
-    );
-  }
+    // verificare rol
+    let member;
+    try {
+      member = await interaction.guild.members.fetch(interaction.user.id);
+    } catch {
+      return interaction.reply({ content: '❌ Eroare la verificarea rolului!', ephemeral: true });
+    }
 
-  // Câte chei să genereze
-  const count = interaction.options.getInteger('count'); // required în slash command
-  if (!count || count < 1) {
-    return interaction.editReply({ content: '❌ Număr invalid de chei!' });
-  }
+    if (!member.roles.cache.has(ALLOWED_ROLE_ID)) {
+      return interaction.reply({ content: '❌ Nu ai rolul necesar pentru a genera chei!', ephemeral: true });
+    }
 
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + days);
+    await interaction.deferReply({ ephemeral: true });
 
-  // Format dată: DD/MM/YYYY HH:mm
-  const formatDate = (date) => {
-    const d = new Date(date);
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    return `${day}/${month}/${year} ${hours}:${minutes}`;
-  };
+    // days: 7,31,91 (rotunjire la cea mai apropiată)
+    const durationOptions = [7, 31, 91];
+    let days = interaction.options.getInteger('days') ?? 7;
 
-  // Generează N chei
-  const keys = [];
-  for (let i = 0; i < count; i++) {
-    keys.push(generateKey());
-  }
+    if (!durationOptions.includes(days)) {
+      days = durationOptions.reduce((prev, curr) =>
+        Math.abs(curr - days) < Math.abs(prev - days) ? curr : prev
+      );
+    }
 
-  // Insert bulk în Supabase
-  const rows = keys.map((k) => ({
-    key: k,
-    duration_days: days,
-    expires_at: expiresAt.toISOString(),
-    created_by: interaction.user.id
-  }));
+    // count
+    const count = interaction.options.getInteger('count');
+    if (!count || count < 1) {
+      return interaction.editReply({ content: '❌ Număr invalid de chei!' });
+    }
 
-  const { error } = await supabase
-    .from('license_keys')
-    .insert(rows);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + days);
 
-  if (error) {
-    console.error('❌ Supabase error:', error);
-    return interaction.editReply({
-      content: `❌ Eroare la salvare: ${error.message}`
-    });
-  }
+    // generează cheile
+    const keys = Array.from({ length: count }, () => generateKey());
 
-  // Confirmare privată
-  await interaction.editReply({
-    content: `✅ Am generat **${count}** chei și le-am trimis în canal!`
-  });
+    // insert bulk supabase
+    const rows = keys.map((k) => ({
+      key: k,
+      duration_days: days,
+      expires_at: expiresAt.toISOString(),
+      created_by: interaction.user.id
+    }));
 
-  const header = `West Spoofer keys (${count}) | Duration: ${days} Days | Expires: ${formatDate(expiresAt)}\n`;
+    const { error } = await supabase.from('license_keys').insert(rows);
 
-  // Dacă sunt mai mult de 100 -> trimite fișier text
-  if (count > 100) {
-    const content = header + keys.map(k => k).join('\n') + '\n';
-    const buffer = Buffer.from(content, 'utf8');
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      return interaction.editReply({ content: `❌ Eroare la salvare: ${error.message}` });
+    }
 
-    const file = new AttachmentBuilder(buffer, {
-      name: `keys_${count}_${days}days.txt`
-    });
+    // confirmare privată
+    await interaction.editReply({ content: `✅ Am generat **${count}** chei și le-am trimis în canal!` });
 
-    await interaction.channel.send({
-      content: `📄 Am generat **${count}** chei. Le găsești în fișierul atașat.\nExpires: **${formatDate(expiresAt)}**`,
-      files: [file]
-    });
-  } else {
-    // <= 100 -> trimite în mesaj (atenție la limită Discord 2000 caractere)
-    // Ca să evităm să depășim limita, le punem într-un code block și tăiem dacă e nevoie.
-    let body = keys.join('\n');
-    let msg = `${header}\`\`\`\n${body}\n\`\`\``;
+    const header = `West Spoofer keys (${count}) | Duration: ${days} Days | Expires: ${formatDate(expiresAt)}\n`;
 
-    // Fallback: dacă totuși depășește 2000, trimite fișier.
-    if (msg.length > 1900) {
-      const content = header + body + '\n';
-      const buffer = Buffer.from(content, 'utf8');
-      const file = new AttachmentBuilder(buffer, { name: `keys_${count}_${days}days.txt` });
+    // dacă >100 -> fișier .txt
+    if (count > 100) {
+      const content = header + keys.join('\n') + '\n';
+      const file = new AttachmentBuilder(Buffer.from(content, 'utf8'), {
+        name: `keys_${count}_${days}days.txt`
+      });
 
       await interaction.channel.send({
-        content: `📄 Cheile sunt prea multe pentru un singur mesaj. Le-am pus în fișier.\nExpires: **${formatDate(expiresAt)}**`,
+        content: `📄 Am generat **${count}** chei. Le găsești în fișierul atașat.\nExpires: **${formatDate(expiresAt)}**`,
         files: [file]
       });
     } else {
-      await interaction.channel.send(msg);
-    }
-  }
+      // <= 100 -> mesaj (cu fallback dacă depășește limita)
+      const body = keys.join('\n');
+      const msg = `${header}\`\`\`\n${body}\n\`\`\``;
 
-  // Log opțional
-  try {
-    const logChannel = interaction.guild.channels.cache.find(c => c.name === 'license-logs');
-    if (logChannel) {
-      await logChannel.send({
-        embeds: [{
-          color: 0x22C55E,
-          description: `✅ **${interaction.user.tag}** a generat **${count}** chei de **${days} zile**`
-        }]
-      });
+      if (msg.length > 1900) {
+        const content = header + body + '\n';
+        const file = new AttachmentBuilder(Buffer.from(content, 'utf8'), {
+          name: `keys_${count}_${days}days.txt`
+        });
+
+        await interaction.channel.send({
+          content: `📄 Cheile sunt prea multe pentru un singur mesaj, le-am pus în fișier.\nExpires: **${formatDate(expiresAt)}**`,
+          files: [file]
+        });
+      } else {
+        await interaction.channel.send(msg);
+      }
     }
-  } catch (e) {}
-}
+
+    // log opțional (#license-logs)
+    try {
+      const logChannel = interaction.guild.channels.cache.find(c => c.name === 'license-logs');
+      if (logChannel) {
+        await logChannel.send({
+          embeds: [{
+            color: 0x22C55E,
+            description: `✅ **${interaction.user.tag}** a generat **${count}** chei de **${days} zile**`
+          }]
+        });
+      }
+    } catch {}
+  }
+};
     
     // /keys
     if (interaction.commandName === 'keys') {
