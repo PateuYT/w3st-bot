@@ -58,6 +58,18 @@ client.on(Events.InteractionCreate, async interaction => {
 
 // /generate
 if (interaction.commandName === 'generate') {
+    // Verificare ID specific - DOAR acest user poate genera
+    const ALLOWED_USER_ID = '1474504134656004199';
+    
+    if (interaction.user.id !== ALLOWED_USER_ID) {
+        return interaction.reply({ 
+            content: '❌ Nu ai permisiune să generezi chei! Contactează administratorul.', 
+            ephemeral: true 
+        });
+    }
+    
+    await interaction.deferReply({ ephemeral: true });
+    
     const days = interaction.options.getInteger('days') || 30;
     const key = generateKey();
     
@@ -65,10 +77,9 @@ if (interaction.commandName === 'generate') {
     expiresAt.setDate(expiresAt.getDate() + days);
 
     console.log('Generating key:', key);
-    console.log('Days:', days);
-    console.log('Expires:', expiresAt.toISOString());
+    console.log('By user:', interaction.user.tag, interaction.user.id);
 
-    const { data, error } = await supabase
+    const { error } = await supabase
         .from('license_keys')
         .insert({
             key: key,
@@ -77,16 +88,27 @@ if (interaction.commandName === 'generate') {
             created_by: interaction.user.id
         });
 
-    console.log('Supabase response:', { data, error });
-
     if (error) {
         console.error('❌ Supabase error:', error);
-        return interaction.reply({ 
-            content: `❌ Eroare: ${error.message}`, 
-            ephemeral: true 
+        return interaction.editReply({ 
+            content: `❌ Eroare la salvare: ${error.message}` 
         });
     }
-}
+
+    const embed = {
+        color: 0xDC2626,
+        title: '🔑 Cheie Generată cu Succes',
+        fields: [
+            { name: 'Cheie', value: `\`\`\`${key}\`\`\``, inline: false },
+            { name: 'Durată', value: `${days} zile`, inline: true },
+            { name: 'Expiră la', value: `<t:${Math.floor(expiresAt.getTime()/1000)}:D>`, inline: true }
+        ],
+        footer: { text: `Generată de ${interaction.user.tag}` },
+        timestamp: new Date().toISOString()
+    };
+
+    await interaction.editReply({ embeds: [embed] });
+    
     // /keys
     if (interaction.commandName === 'keys') {
         await interaction.deferReply({ ephemeral: true });
