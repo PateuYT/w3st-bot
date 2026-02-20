@@ -59,7 +59,7 @@ client.on(Events.InteractionCreate, async interaction => {
 // /generate
 if (interaction.commandName === 'generate') {
     // Verificare ID specific - DOAR acest user poate genera
-    const ALLOWED_USER_ID = '1474504134656004199';
+    const ALLOWED_USER_ID = '1437854771850776596';
     
     if (interaction.user.id !== ALLOWED_USER_ID) {
         return interaction.reply({ 
