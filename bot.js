@@ -58,10 +58,8 @@ client.on(Events.InteractionCreate, async interaction => {
 
 // /generate
 if (interaction.commandName === 'generate') {
-    // Verificare după ROL ID
     const ALLOWED_ROLE_ID = '1474504134656004199';
     
-    // Verifică dacă suntem în guild (server)
     if (!interaction.guild) {
         return interaction.reply({ 
             content: '❌ Comanda poate fi folosită doar pe server!', 
@@ -69,25 +67,17 @@ if (interaction.commandName === 'generate') {
         });
     }
     
-    // Fetch member cu rolurile
     let member;
     try {
         member = await interaction.guild.members.fetch(interaction.user.id);
     } catch (err) {
-        console.error('Eroare fetch member:', err);
         return interaction.reply({ 
             content: '❌ Eroare la verificarea rolului!', 
             ephemeral: true 
         });
     }
     
-    // Verifică rolul
     const hasRole = member.roles.cache.has(ALLOWED_ROLE_ID);
-    
-    console.log('User:', interaction.user.tag);
-    console.log('User roles:', member.roles.cache.map(r => r.name).join(', '));
-    console.log('Looking for role ID:', ALLOWED_ROLE_ID);
-    console.log('Has role:', hasRole);
     
     if (!hasRole) {
         return interaction.reply({ 
@@ -98,13 +88,22 @@ if (interaction.commandName === 'generate') {
     
     await interaction.deferReply({ ephemeral: true });
     
-    const days = interaction.options.getInteger('days') || 30;
-    const key = generateKey();
+    // Opțiuni predefinite de durată
+    const durationOptions = [7, 31, 91];
+    let days = interaction.options.getInteger('days') || 7;
     
+    // Rotunjește la cea mai apropiată opțiune validă
+    if (!durationOptions.includes(days)) {
+        days = durationOptions.reduce((prev, curr) => 
+            Math.abs(curr - days) < Math.abs(prev - days) ? curr : prev
+        );
+    }
+    
+    const key = generateKey();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + days);
 
-    console.log('Generating key:', key);
+    console.log('Generating key:', key, 'Days:', days);
 
     const { error } = await supabase
         .from('license_keys')
@@ -122,20 +121,28 @@ if (interaction.commandName === 'generate') {
         });
     }
 
-    const embed = {
-        color: 0xDC2626,
-        title: '🔑 Cheie Generată cu Succes',
-        fields: [
-            { name: 'Cheie', value: `\`\`\`${key}\`\`\``, inline: false },
-            { name: 'Durată', value: `${days} zile`, inline: true },
-            { name: 'Expiră la', value: `<t:${Math.floor(expiresAt.getTime()/1000)}:D>`, inline: true }
-        ],
-        footer: { text: `Generată de ${interaction.user.tag}` },
-        timestamp: new Date().toISOString()
+    // Format dată: DD/MM/YYYY HH:mm
+    const formatDate = (date) => {
+        const d = new Date(date);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
     };
 
-    await interaction.editReply({ embeds: [embed] });
+    // Mesaj privat confirmare
+    await interaction.editReply({ 
+        content: '✅ Cheia a fost generată și trimisă în canal!' 
+    });
     
+    // Mesaj PUBLIC pentru toată lumea
+    const publicMessage = `West Spoofer key: **${key}**, Duration: **${days} Days**, Expires: **${formatDate(expiresAt)}**`;
+    
+    await interaction.channel.send(publicMessage);
+    
+    // Log opțional
     try {
         const logChannel = interaction.guild.channels.cache.find(c => c.name === 'license-logs');
         if (logChannel) {
