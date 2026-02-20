@@ -109,6 +109,33 @@ if (interaction.commandName === 'generate') {
 
     await interaction.editReply({ embeds: [embed] });
     
+    try {
+        const logChannel = interaction.guild.channels.cache.find(c => c.name === 'license-logs');
+        if (logChannel) {
+            await logChannel.send({
+                embeds: [{
+                    color: 0x22C55E,
+                    description: `✅ **${interaction.user.tag}** a generat o cheie de **${days} zile**`
+                }]
+            });
+        }
+    } catch (e) {}
+}
+
+    const embed = {
+        color: 0xDC2626,
+        title: '🔑 Cheie Generată cu Succes',
+        fields: [
+            { name: 'Cheie', value: `\`\`\`${key}\`\`\``, inline: false },
+            { name: 'Durată', value: `${days} zile`, inline: true },
+            { name: 'Expiră la', value: `<t:${Math.floor(expiresAt.getTime()/1000)}:D>`, inline: true }
+        ],
+        footer: { text: `Generată de ${interaction.user.tag}` },
+        timestamp: new Date().toISOString()
+    };
+
+    await interaction.editReply({ embeds: [embed] });
+    
     // /keys
     if (interaction.commandName === 'keys') {
         await interaction.deferReply({ ephemeral: true });
