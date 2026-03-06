@@ -22,7 +22,7 @@ function generateKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   const segment = () =>
     Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  return `SOLAH-${segment()}-${segment()}-${segment()}`;
+  return `YOUTH-${segment()}-${segment()}-${segment()}`;
 }
 
 function formatDate(date) {
@@ -150,7 +150,7 @@ client.on(Events.InteractionCreate, async interaction => {
       content: `✅ Am generat **${count}** chei și le-am trimis în canal!`,
     });
 
-    const header = `W3ST keys (${count}) | Duration: ${days} days | Expires: ${formatDate(expiresAt)}\n`;
+    const header = `Youth keys (${count}) | Duration: ${days} days | Expires: ${formatDate(expiresAt)}\n`;
 
     if (count > 100) {
       const content = header + keys.join('\n') + '\n';
@@ -159,7 +159,7 @@ client.on(Events.InteractionCreate, async interaction => {
       });
 
       await interaction.channel.send({
-        content: `📄 Am generat **${count}** chei. Le găsești în fișierul atașat.\nExpires: **${formatDate(expiresAt)}**`,
+        content: `📄 Generated keys **${count}** You find them in this file.\nExpires: **${formatDate(expiresAt)}**`,
         files: [file],
       });
     } else {
